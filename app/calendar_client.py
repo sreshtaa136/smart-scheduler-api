@@ -14,7 +14,7 @@ creds = service_account.Credentials.from_service_account_file(
 )
 service = build("calendar", "v3", credentials=creds)
 
-# checks the provider's calendar and returns all events in the given window
+# checks the provider's calendar and returns all available slots in the given window
 # calendar_id : provider's calendar email or id
 # time_min, time_max : window to check availability
 async def fetch_google_availability(calendar_id: str, time_min: datetime, time_max: datetime):
