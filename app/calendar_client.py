@@ -62,10 +62,34 @@ async def book_google_event(calendar_id: str, appointment: dict):
   event = service.events().insert(calendarId=calendar_id, body=body).execute()
   return event
 
-# async def book_google_event(calendar_id: str, appointment: dict):
-#   body = {
-#     "summary": f"Appointment with patient {appointment['patient_id']}",
-#     "start": {"dateTime": appointment["start"]},
-#     "end": {"dateTime": appointment["end"]},
-#   }
-#   return service.events().insert(calendarId=calendar_id, body=body).execute()
+async def create_availability_event(calendar_id: str, slot: dict):
+  """
+  Creates an 'Available' event on the provider's calendar.
+  Use transparency='transparent' so it's treated as free time.
+  """
+  body = {
+    "summary": "Available slot",
+    "start": {"dateTime": slot["start"]},
+    "end": {"dateTime": slot["end"]},
+    "transparency": "transparent",
+  }
+  return service.events().insert(calendarId=calendar_id, body=body).execute()
+
+async def delete_availability_event(calendar_id: str, slot: dict):
+  """
+  Finds any 'Available slot' events in the given window and removes them.
+  """
+  events = service.events().list(
+    calendarId=calendar_id,
+    timeMin=slot["start"],
+    timeMax=slot["end"],
+    singleEvents=True
+  ).execute().get("items", [])
+
+  for ev in events:
+    if ev.get("summary") == "Available slot":
+      service.events().delete(
+        calendarId=calendar_id,
+        eventId=ev["id"]
+      ).execute()
+
