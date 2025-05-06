@@ -1,54 +1,13 @@
 import os
 from fastapi import FastAPI
-from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
-from app.calendar_client import book_google_event
 from app.routes import availability, recommend, booking
 from contextlib import asynccontextmanager
 from app.db import mongo
+from app.sample_data import sample_providers
+from app.utils import generate_monthly_slots
 
 load_dotenv()
-
-# --- Sample data -------------------------------------------------------------
-
-AEST = ZoneInfo("Australia/Melbourne")
-sample_providers = [
-  {"id": "sreshtaaias@gmail.com", "name": "Dr. Alice Smith", "specialties": ["cardiology"]},
-  {"id": "sreshtaa.t@gmail.com", "name": "Dr. Bob Jones",   "specialties": ["dermatology","general"]},
-]
-
-now_aest = datetime.now(AEST)
-tomorrow = (now_aest + timedelta(days=1)).replace(hour=9,  minute=0, second=0, microsecond=0)
-day_after = (now_aest + timedelta(days=2)).replace(hour=14, minute=0, second=0, microsecond=0)
-
-sample_appointments = [
-  {
-    "provider_id": "sreshtaaias@gmail.com",
-    "start": tomorrow.isoformat(),
-    "end": (tomorrow + timedelta(minutes=30)).isoformat(),
-    "notes": "Initial consultation",
-    "patient": {
-      "name": "John Doe",
-      "preferences": {"morning_only": True},
-      "conditions": "hypertension",
-    },
-  },
-  {
-    "provider_id": "sreshtaa.t@gmail.com",
-    "start": day_after.isoformat(),
-    "end":   (day_after + timedelta(minutes=30)).isoformat(),
-    "notes": "Skin rash follow-up",
-    "patient": {
-      "name": "Jane Roe",
-      "preferences": {},
-      "conditions": "eczema",
-    },
-  },
-]
-
-# ------------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,18 +16,35 @@ async def lifespan(app: FastAPI):
   if await mongo.providers.count_documents({}) == 0:
     await mongo.providers.insert_many(sample_providers)
 
-  # appointments with rollback on failure
-  if await mongo.appointments.count_documents({}) == 0:
-    for appt in sample_appointments:
+  # seed availability slots throughout the month
+  monthly_slots = generate_monthly_slots(sample_providers)
+  if await mongo.availability.count_documents({}) == 0:
+    for slot in monthly_slots:
       inserted_id = None
       try:
-        result = await mongo.appointments.insert_one(appt)
-        inserted_id = result.inserted_id
-        await book_google_event(appt["provider_id"], appt)
+        # insert into Mongo
+        res = await mongo.availability.insert_one(slot)
+        inserted_id = res.inserted_id
+        # create transparent “Available” event on Google
+        # await create_availability_event(slot["provider_id"], slot)
       except Exception as e:
-        if inserted_id:
-            await mongo.appointments.delete_one({"_id": inserted_id})
-        print(f"⚠️ Rolled back seed for {appt['provider_id']}: {e}")
+        # # rollback on failure
+        # if inserted_id:
+        #   await mongo.availability.delete_one({"_id": inserted_id})
+        print(f"⚠️ Rolled back availability for {slot['provider_id']} at {slot['start']}: {e}")
+
+  # appointments with rollback on failure
+  # if await mongo.appointments.count_documents({}) == 0:
+  #   for appt in sample_appointments:
+  #     inserted_id = None
+  #     try:
+  #       result = await mongo.appointments.insert_one(appt)
+  #       inserted_id = result.inserted_id
+  #       await book_google_event(appt["provider_id"], appt)
+  #     except Exception as e:
+  #       if inserted_id:
+  #           await mongo.appointments.delete_one({"_id": inserted_id})
+  #       print(f"⚠️ Rolled back seed for {appt['provider_id']}: {e}")
 
   # yield control to FastAPI so it starts serving
   yield
