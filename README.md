@@ -2,7 +2,7 @@
 
 An LLM-driven smart scheduling API built with FastAPI, MongoDB, and Google Calendar — complete with context-aware recommendations, conflict detection, availability generation, transactional booking, and email invites.
 
----
+
 
 ## 🚀 Highlights
 
@@ -24,7 +24,6 @@ An LLM-driven smart scheduling API built with FastAPI, MongoDB, and Google Calen
 - **Modern user focused UI**  
   🚧 Building in progress   
 
----
 
 ## 🏗 Tech Stack
 
@@ -39,7 +38,6 @@ An LLM-driven smart scheduling API built with FastAPI, MongoDB, and Google Calen
 - **icalendar** (ICS invite generation)  
 - **smtplib** (SMTP email delivery)
 
----
 
 ## 📡 API Endpoints & Functionality
 
@@ -49,7 +47,6 @@ An LLM-driven smart scheduling API built with FastAPI, MongoDB, and Google Calen
 | **Recommend Slots**                              | `POST` | `/recommend/`<br>Given a provider, time window, and patient info (`name`, `preferences`, `conditions`), returns up to 3 JSON‐formatted slot suggestions with reasons. |
 | **Book Appointment**                             | `POST` | `/book/`<br>Creates a confirmed appointment:<br>1. Persists it in MongoDB<br>2. Adds it to Google Calendar<br>3. Deletes the matching availability slot (DB & Google)<br>4. Sends an `.ics` invite email to the patient |
 
----
 
 ## 🔧 Getting Started
 1. Clone & Virtual Environment
@@ -89,7 +86,7 @@ uvicorn app.main:app --reload
 
 Interactive docs: http://localhost:8000/docs
 
----
+
 ## 🚧 Future Enhancements
 - Add JWT authentication and Role-Based Access Control.
 - Email a summary of the consultation to the patient 
