@@ -39,9 +39,33 @@ async def fetch_google_availability(calendar_id: str, time_min: datetime, time_m
 
 # creates a new calendar event for the booked appointment in the given calendar id
 async def book_google_event(calendar_id: str, appointment: dict):
+  """
+  Expects appointment to include:
+    - 'patient': dict with field 'name'
+    - 'start', 'end': datetime objects (or ISO strings)
+    - 'notes': optional string description
+  """
+  # Ensure start/end are ISO-formatted strings
+  start_val = appointment["start"]
+  end_val = appointment["end"]
+  start_iso = start_val.isoformat() if isinstance(start_val, datetime) else start_val
+  end_iso = end_val.isoformat() if isinstance(end_val, datetime) else end_val
+
   body = {
-    "summary": f"Appointment with patient {appointment['patient_id']}",
-    "start": {"dateTime": appointment["start"]},
-    "end": {"dateTime": appointment["end"]},
+    "summary": f"Appointment with {appointment['patient']['name']}",
+    "description": appointment.get("notes", ""),
+    "start": {"dateTime": start_iso},
+    "end": {"dateTime": end_iso},
   }
-  return service.events().insert(calendarId=calendar_id, body=body).execute()
+
+  # insert the event and return the created event object (includes 'htmlLink')
+  event = service.events().insert(calendarId=calendar_id, body=body).execute()
+  return event
+
+# async def book_google_event(calendar_id: str, appointment: dict):
+#   body = {
+#     "summary": f"Appointment with patient {appointment['patient_id']}",
+#     "start": {"dateTime": appointment["start"]},
+#     "end": {"dateTime": appointment["end"]},
+#   }
+#   return service.events().insert(calendarId=calendar_id, body=body).execute()

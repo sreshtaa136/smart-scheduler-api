@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from app.main import mongo
+from app.db import mongo
 from app.calendar_client import fetch_google_availability
 from app.utils import filter_conflicts
 from app.llm_client import recommend_slots
@@ -15,9 +15,9 @@ class PatientInfo(BaseModel):
     default_factory=dict,
     description="E.g. {'morning_only': True}"
   )
-  conditions: List[str] = Field(
-    default_factory=list,
-    description="E.g. ['hypertension', 'diabetes']"
+  conditions: str = Field(
+    default_factory="",
+    description="E.g. 'hypertension', 'diabetes', etc."
   )
 
 # request body includes provider, window, and patient info
