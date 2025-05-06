@@ -1,11 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from app.db import mongo
-from app.calendar_client import fetch_google_availability
 from app.utils import filter_conflicts
 from app.llm_client import recommend_slots
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import List, Dict
+from typing import Dict, List
 
 router = APIRouter(prefix="/recommend")
 
@@ -27,23 +26,32 @@ class RecommendRequest(BaseModel):
   end: datetime
   patient: PatientInfo
 
+class Slot(BaseModel):
+  start: datetime
+  end: datetime
+  reason: str
 
-@router.post("/")
-async def recommend(request: dict):
-  # lookup patient profile
-  # patient = await mongo.patients.find_one({"_id": request["patient_id"]})
-  # if not patient:
-  #   raise HTTPException(404, "Patient not found")
+class RecommendResponse(BaseModel):
+  recommendations: List[Slot]
 
-  # fetch all potential slots
-  dt_start = datetime.fromisoformat(request["start"])
-  dt_end   = datetime.fromisoformat(request["end"])
-  slots = await fetch_google_availability(request["provider_id"], dt_start, dt_end)
-  # load existing appts and filter conflicts
-  existing = await mongo.appointments.find({
-    "provider_id": request["provider_id"]
-  }).to_list(None)
-  free_slots = filter_conflicts(slots, existing)
-  # ask the LLM for up to 3 recommendations
-  suggestion = await recommend_slots(request.patient.dict(), free_slots)
-  return {"recommendations": suggestion}
+
+@router.post("/", response_model=RecommendResponse)
+async def recommend(request: RecommendRequest):  
+  # gather availability & existing bookings
+  availabilities = await mongo.availability.find({
+    "provider_id": request.provider_id,
+    "start": {"$gte": request.start.isoformat()},
+    "end":   {"$lte": request.end.isoformat()}
+  }, {"_id": 0}).to_list(None)
+
+  booked = await mongo.appointments.find({
+    "provider_id": request.provider_id
+  }, {"_id": 0}).to_list(None)
+
+  free_slots = filter_conflicts(availabilities, booked)
+
+  # ask the LLM, get back a List[dict]
+  suggestions = await recommend_slots(request.patient, free_slots)
+
+  # return parsed suggestions directly
+  return RecommendResponse(recommendations=suggestions)

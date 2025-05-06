@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 from app.db import mongo
 from app.calendar_client import book_google_event
 
@@ -54,6 +54,24 @@ async def book(appointment: BookingRequest):
       detail=f"Failed to book on Google Calendar: {e}"
     )
 
+  # remove that slot from our availability collection
+  await mongo.availability.delete_one({
+    "provider_id": appt_data["provider_id"],
+    "start": appt_data["start"].isoformat(),
+    "end": appt_data["end"].isoformat()
+  })
+
+  # remove the “Available slot” event from the provider’s calendar
+  # try:
+  #   await delete_availability_event(
+  #     appt_data["provider_id"],
+  #     {"start": appt_data["start"].isoformat(), "end": appt_data["end"].isoformat()}
+  #   )
+  # except Exception as e:
+  #   # log but do not rollback the booking
+  #   print(f"⚠️ Failed to delete availability event: {e}")
+
+  # return to client
   return BookingResponse(
     appointment_id=str(res.inserted_id),
     event_link=event.get("htmlLink")

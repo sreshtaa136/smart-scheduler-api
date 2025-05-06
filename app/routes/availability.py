@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
-from datetime import datetime
-from app.calendar_client import fetch_google_availability
+from dateutil.parser import isoparse
+from app.db import mongo
+from app.utils import filter_conflicts
 
 router = APIRouter(prefix="/availability")
 
@@ -12,10 +13,24 @@ async def get_availability(
 ):
   # validate dates
   try:
-    dt_start = datetime.fromisoformat(start)
-    dt_end = datetime.fromisoformat(end)
+    dt_start = isoparse(start)
+    dt_end   = isoparse(end)
   except ValueError:
     raise HTTPException(400, "Invalid ISO date format")
-  # fetch slots
-  google_slots = await fetch_google_availability(provider_id, dt_start, dt_end)
-  return {"google": google_slots}
+  
+  # load all seeded availability for this provider in the window
+  avail_docs = await mongo.availability.find({
+    "provider_id": provider_id,
+    "start": {"$gte": dt_start.isoformat()},
+    "end":   {"$lte": dt_end.isoformat()}
+  }, {"_id": 0}).to_list(None)
+
+  # load existing confirmed bookings
+  booked = await mongo.appointments.find({
+    "provider_id": provider_id
+  }, {"_id": 0}).to_list(None)
+
+  # filter out any slots that overlap a booking
+  free_slots = filter_conflicts(avail_docs, booked)
+
+  return {"available": free_slots}
