@@ -20,17 +20,10 @@ async def lifespan(app: FastAPI):
   monthly_slots = generate_monthly_slots(sample_providers)
   if await mongo.availability.count_documents({}) == 0:
     for slot in monthly_slots:
-      inserted_id = None
       try:
         # insert into Mongo
-        res = await mongo.availability.insert_one(slot)
-        inserted_id = res.inserted_id
-        # create transparent “Available” event on Google
-        # await create_availability_event(slot["provider_id"], slot)
+        await mongo.availability.insert_one(slot)
       except Exception as e:
-        # # rollback on failure
-        # if inserted_id:
-        #   await mongo.availability.delete_one({"_id": inserted_id})
         print(f"⚠️ Rolled back availability for {slot['provider_id']} at {slot['start']}: {e}")
 
   # appointments with rollback on failure

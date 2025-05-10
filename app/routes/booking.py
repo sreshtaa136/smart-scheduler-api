@@ -4,11 +4,15 @@ from datetime import datetime
 from typing import Optional, Dict
 from app.db import mongo
 from app.calendar_client import book_google_event
+from pydantic import EmailStr
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+from app.utils_mail import send_appointment_email
 
 router = APIRouter(prefix="/book")
 
 class PatientInfo(BaseModel):
   name: str
+  email: EmailStr
   preferences: Dict[str, bool] = Field(
     default_factory=dict,
     description="E.g. {'morning_only': True}"
@@ -36,8 +40,15 @@ class BookingResponse(BaseModel):
   )
 
 @router.post("/", response_model=BookingResponse)
-async def book(appointment: BookingRequest):
+async def book(appointment: BookingRequest, background_tasks: BackgroundTasks):
   appt_data = appointment.model_dump()
+  # get the provider's details
+  provider = await mongo.providers.find_one({
+    "id": appt_data["provider_id"]
+  })
+  if not provider:
+    raise HTTPException(404, "Provider not found")
+  appt_data["provider_name"] = provider["name"]
   res = await mongo.appointments.insert_one(appt_data)
 
   try:
@@ -61,12 +72,19 @@ async def book(appointment: BookingRequest):
     "end": appt_data["end"].isoformat()
   })
 
+  # schedule the email send in the background
+  background_tasks.add_task(
+    send_appointment_email,
+    appointment.patient.email,
+    appt_data,
+  )
+
   # remove the “Available slot” event from the provider’s calendar
   # try:
-  #   await delete_availability_event(
-  #     appt_data["provider_id"],
-  #     {"start": appt_data["start"].isoformat(), "end": appt_data["end"].isoformat()}
-  #   )
+    # await delete_availability_event(
+    #   appt_data["provider_id"],
+    #   {"start": appt_data["start"].isoformat(), "end": appt_data["end"].isoformat()}
+    # )
   # except Exception as e:
   #   # log but do not rollback the booking
   #   print(f"⚠️ Failed to delete availability event: {e}")
